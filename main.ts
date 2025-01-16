@@ -1,90 +1,61 @@
 import { Construct } from "constructs";
-import { App, Chart, ChartProps } from "cdk8s";
-import {
-  KubeDeployment,
-  KubeService,
-  IntOrString,
-  KubeIngress,
-} from "./imports/k8s";
+import { App, Chart } from "cdk8s";
+import * as kplus from "cdk8s-plus-31";
+import { Size } from "cdk8s"; // Import Size from cdk8s core
 
-export class MyChart extends Chart {
-  constructor(scope: Construct, id: string, props: ChartProps = {}) {
-    super(scope, id, props);
+export class HttpEcho extends Chart {
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
 
-    const label = { app: "hello-k8s" };
-
-    // Create deployment
-    new KubeDeployment(this, "deployment", {
-      spec: {
-        replicas: 2,
-        selector: {
-          matchLabels: label,
-        },
-        template: {
-          metadata: { labels: label },
-          spec: {
-            containers: [
-              {
-                name: "nginx",
-                image: "nginx:1.25", // Using nginx latest stable version
-                ports: [{ containerPort: 80 }],
-              },
-            ],
-          },
-        },
-      },
-    });
-
-    // Create service
-    const service = new KubeService(this, "hello-service", {
-      spec: {
-        type: "ClusterIP",
-        ports: [{ port: 80, targetPort: IntOrString.fromNumber(80) }],
-        selector: label,
-      },
-    });
-
-    // Create ingress
-    new KubeIngress(this, "hello-ingress", {
+    // Create ingress with AWS ALB annotations
+    const ingress = new kplus.Ingress(this, "ingress", {
       metadata: {
         annotations: {
           "kubernetes.io/ingress.class": "alb",
           "alb.ingress.kubernetes.io/scheme": "internet-facing",
           "alb.ingress.kubernetes.io/target-type": "ip",
           "alb.ingress.kubernetes.io/listen-ports": '[{"HTTP": 80}]',
-          "alb.ingress.kubernetes.io/manage-backend-security-group-rules":
-            "true",
-          "alb.ingress.kubernetes.io/group.name": "hello-app",
+          "alb.ingress.kubernetes.io/group.name": "echo-app",
         },
       },
+    });
+    // Add different paths
+    ingress.addRule("/", this.echoBackend("root"));
+    ingress.addRule("/foo", this.echoBackend("foo"));
+    ingress.addRule("/foo/bar", this.echoBackend("foo-bar"));
+  }
 
-      spec: {
-        ingressClassName: "alb",
-        rules: [
-          {
-            http: {
-              paths: [
-                {
-                  path: "/",
-                  pathType: "Prefix",
-                  backend: {
-                    service: {
-                      name: service.name,
-                      port: {
-                        number: 80,
-                      },
-                    },
-                  },
-                },
-              ],
+  private echoBackend(text: string) {
+    // Create deployment for each path
+    const deploy = new kplus.Deployment(this, text, {
+      containers: [
+        {
+          image: "hashicorp/http-echo",
+          args: ["-text", text],
+          portNumber: 5678,
+          resources: {
+            cpu: {
+              request: kplus.Cpu.millis(100),
+              limit: kplus.Cpu.millis(500),
+            },
+            memory: {
+              request: Size.mebibytes(128),
+              limit: Size.mebibytes(256),
             },
           },
-        ],
-      },
+        },
+      ],
     });
+
+    // Create service for the deployment
+    return kplus.IngressBackend.fromService(
+      deploy.exposeViaService({
+        ports: [{ port: 80, targetPort: 5678 }],
+      })
+    );
   }
 }
 
 const app = new App();
-new MyChart(app, "hello-k8s");
+new HttpEcho(app, "http-echo");
 app.synth();
