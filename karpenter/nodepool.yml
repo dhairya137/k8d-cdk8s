@@ -1,0 +1,69 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    metadata:
+      labels:
+        type: karpenter-node
+        nodepool: default
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: "node.kubernetes.io/instance-type"
+          operator: In
+          values:
+            - t3.large
+            - t3.xlarge
+            - m5.large
+            - m5.xlarge
+            - c5.large
+            - c5.xlarge
+  limits:
+    cpu: 1000
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 1m
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2023
+  instanceProfile: "KarpenterNodeInstanceProfile-CdkK8sCluster"
+  subnetSelectorTerms:
+    - id: subnet-04bcc5396ff9436f0 # your private subnet ID
+    - id: subnet-0d7f13e89058f56a7 # your private subnet ID
+  # Explicitly specify the security group
+  securityGroupSelectorTerms:
+    - id: sg-0cd5b7d4252b59d8c
+  # Explicitly specify the AMI ID
+  amiSelectorTerms:
+    - id: ami-093c78f7fcb474b20
+  tags:
+    karpenter.sh/discovery: CdkK8sCluster
+    Name: karpenter-node
+    Cluster: CdkK8sCluster
+  userData: |
+    MIME-Version: 1.0
+    Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+    --BOUNDARY
+    Content-Type: text/x-shellscript; charset="us-ascii"
+
+    #!/bin/bash
+    /etc/eks/bootstrap.sh CdkK8sCluster \
+      --container-runtime containerd \
+      --kubelet-extra-args "--node-labels=karpenter.sh/nodepool=default,type=karpenter-node"
+    --BOUNDARY--
