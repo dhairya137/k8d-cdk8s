@@ -1,0 +1,24 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: jetstreamtest
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: consumer-deployment # Your consumer deployment name
+  pollingInterval: 10
+  cooldownPeriod: 15
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  triggers:
+    - type: nats-jetstream
+      metadata:
+        # From the Fission command parameters
+        natsServerMonitoringEndpoint: "nats-jetstream.default.svc.cluster.local:8222"
+        natsServer: "nats://nats-jetstream.default.svc.cluster.local:4222"
+        stream: "input"
+        subject: "input.created"
+        consumer: "fission_consumer"
+        account: "$G"
+        lagThreshold: "5"
+        activationLagThreshold: "3"

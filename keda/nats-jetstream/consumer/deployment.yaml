@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer
+  template:
+    metadata:
+      labels:
+        app: consumer
+    spec:
+      containers:
+        - name: consumer
+          image: dhairya13703/nats-consumer:latest
+          env:
+            - name: NATS_SERVER
+              value: "nats://nats-jetstream.default.svc.cluster.local:4222"
+            - name: RESPONSE_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: nats-consumer-config
+                  key: RESPONSE_TOPIC
+            - name: ERROR_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: nats-consumer-config
+                  key: ERROR_TOPIC
+            - name: MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: nats-consumer-config
+                  key: MAX_RETRIES
