@@ -15,15 +15,7 @@ const (
 	batchCount = 10
 )
 
-var (
-	streamName        = "output"
-	streamSubjects    = "output.response-topic"
-	streamNameErr     = "output"
-	errStreamSubjects = "output.error-topic"
-)
-
 func main() {
-
 	logger, err := zap.NewProduction()
 	if err != nil {
 		log.Fatalf("can't initialize zap logger: %v", err)
@@ -39,59 +31,68 @@ func main() {
 	if err != nil {
 		logger.Fatal("err: ", zap.Error(err))
 	}
-	go consumerMessage(logger, js, streamName, streamSubjects, "response_consumer1")
-	consumerMessage(logger, js, streamNameErr, errStreamSubjects, "err_consumer1")
 
-	fmt.Println("All messages consumed")
-
-}
-
-func consumerMessage(logger *zap.Logger, js nats.JetStreamContext, stream, topic, consumer string) {
-
-	fmt.Println(topic)
-
-	/*
-		// Push subscriber
-			js.Subscribe(topic, func(msg *nats.Msg) {
-				msg.Ack()
-
-				log.Println(string(msg.Data))
-			}, nats.Durable(consumer), nats.ManualAck()) // Durable is required because if we allow jetstream to create new consumer we will be reading records from the start from the stream.
-			runtime.Goexit()
-	*/
-	sub, err := js.PullSubscribe(topic, consumer, nats.PullMaxWaiting(512))
+	// Subscribe to input stream for processing messages
+	inputSub, err := js.PullSubscribe("input.created", "fission_consumer",
+		nats.PullMaxWaiting(512),  // Changed from nats.Pull()
+		nats.BindStream("input"))
 	if err != nil {
-		fmt.Printf("error occurred while consuming message:  %v", err.Error())
+		logger.Fatal("error subscribing to input stream: ", zap.Error(err))
 	}
+
+	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Handle shutdown signals
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 
+	// Main processing loop
 	for {
 		select {
 		case <-signalChan:
-			ctx.Done()
-			err = sub.Unsubscribe()
+			logger.Info("Received shutdown signal")
+			err = inputSub.Unsubscribe()
 			if err != nil {
-				logger.Error("error in unsubscribing: ", zap.Error(err))
-			}
-			err = js.DeleteConsumer(stream, consumer)
-			if err != nil {
-				logger.Error("error in deleting consumer: ", zap.Error(err))
+				logger.Error("error unsubscribing: ", zap.Error(err))
 			}
 			return
 		default:
-		}
-		msgs, _ := sub.Fetch(batchCount, nats.Context(ctx))
-		for _, msg := range msgs {
-			fmt.Println("consumed message: ", string(msg.Data))
-			err := msg.Ack()
+			// Fetch messages from input stream
+			msgs, err := inputSub.Fetch(batchCount, nats.Context(ctx))
 			if err != nil {
-				logger.Error("error in ack: ", zap.Error(err))
+				if err != nats.ErrTimeout {
+					logger.Error("error fetching messages: ", zap.Error(err))
+				}
+				continue
+			}
+
+			// Process messages
+			for _, msg := range msgs {
+				// Log received message
+				logger.Info("Received message", zap.String("data", string(msg.Data)))
+
+				// Process the message (add your processing logic here)
+				processedData := "Processed: " + string(msg.Data)
+
+				// Try to publish to response topic
+				_, err := js.Publish("output.response-topic", []byte(processedData))
+				if err != nil {
+					// If publishing fails, send to error topic
+					logger.Error("error publishing response", zap.Error(err))
+					_, err = js.Publish("output.error-topic", []byte(fmt.Sprintf("Error processing: %s", string(msg.Data))))
+					if err != nil {
+						logger.Error("error publishing to error topic", zap.Error(err))
+					}
+				}
+
+				// Acknowledge the message
+				err = msg.Ack()
+				if err != nil {
+					logger.Error("error acknowledging message", zap.Error(err))
+				}
 			}
 		}
 	}
-
 }
