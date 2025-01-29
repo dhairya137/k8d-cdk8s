@@ -1,0 +1,120 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/group.name: echo-app
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    kubernetes.io/ingress.class: alb
+  name: nginx-demo-ingress
+spec:
+  rules:
+    - http:
+        paths:
+          - backend:
+              service:
+                name: nginx-demo-service
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-demo
+spec:
+  minReadySeconds: 0
+  progressDeadlineSeconds: 600
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-demo
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: nginx-demo
+    spec:
+      containers:
+        - image: nginx:1.19.10
+          name: nginx
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "500m" # Increased for better scaling demonstration
+              memory: "512Mi" # Increased for better scaling demonstration
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: false
+          startupProbe:
+            failureThreshold: 3
+            tcpSocket:
+              port: 80
+      securityContext:
+        runAsNonRoot: true
+        fsGroupChangePolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-demo-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: nginx-demo
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nginx-demo-hpa
+spec:
+  behavior:
+    scaleDown:
+      policies:
+        - periodSeconds: 60
+          type: Pods
+          value: 2
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      policies:
+        - periodSeconds: 60
+          type: Pods
+          value: 4
+        - periodSeconds: 60
+          type: Percent
+          value: 200
+      stabilizationWindowSeconds: 60
+  maxReplicas: 10
+  metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 70
+          type: Utilization
+      type: Resource
+    - resource:
+        name: memory
+        target:
+          averageUtilization: 70
+          type: Utilization
+      type: Resource
+  minReplicas: 2
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-demo

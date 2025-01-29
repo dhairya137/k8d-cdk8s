@@ -1,0 +1,6 @@
+kubectl port-forward --address 0.0.0.0 prometheus-promethues-kube-prometheus-prometheus-0  30222:9090 &
+
+kubectl port-forward --address 0.0.0.0 promethues-grafana-5b98ccbc47-lbw5j  3000:3000 &
+Get grafana password
+  kubectl get secret promethues-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+  Default password is - prom-operator
