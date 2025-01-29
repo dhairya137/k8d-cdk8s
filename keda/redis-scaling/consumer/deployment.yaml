@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer
+  template:
+    metadata:
+      labels:
+        app: consumer
+    spec:
+      containers:
+        - name: consumer
+          image: dhairya13703/redis-consumer:v2
+          env:
+            - name: REDIS_HOST
+              value: "redis-service:6379"
+            - name: MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: redis-consumer-config
+                  key: MAX_RETRIES
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"

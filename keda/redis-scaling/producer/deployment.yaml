@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer-deployment
+  namespace: default
+  labels:
+    app: producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      containers:
+        - name: producer
+          image: dhairya13703/redis-producer:v2
+          env:
+            - name: REDIS_HOST
+              value: "redis-service:6379"
+            - name: COUNT
+              value: "1"
+            - name: BATCH_SIZE
+              value: "1"
+            - name: INTERVAL
+              value: "1"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"

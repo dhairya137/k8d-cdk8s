@@ -235,3 +235,10 @@ kubectl describe hpa
 - Consumer name must match between ScaledObject and consumer code
 - Messages must be properly acknowledged to prevent reprocessing
 - KEDA requires proper permissions to access NATS monitoring
+
+## Cleanup
+
+kubectl delete -f consumer/deployment.yaml
+kubectl delete -f consumer/configmap.yaml
+kubectl delete -f producer/deployment.yaml
+kubectl delete -f Nats-ScaledObject.yaml

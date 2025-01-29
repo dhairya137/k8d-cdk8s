@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: redis-scaledobject
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: consumer-deployment
+  pollingInterval: 5
+  cooldownPeriod: 10
+  minReplicaCount: 0 # Changed from 1 to allow scaling to zero
+  maxReplicaCount: 10
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-service.default.svc.cluster.local:6379
+        listName: workqueue
+        listLength: "5"
+        activationListLength: "3"

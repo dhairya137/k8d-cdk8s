@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-consumer-config
+  namespace: default
+data:
+  MAX_RETRIES: "3"
