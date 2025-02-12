@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    external-dns.alpha.kubernetes.io/hostname: wordpress.doapps.pro
+    external-dns.alpha.kubernetes.io/target: b014336d-4b15-4bd9-beb1-1998e4c07ac6.cfargotunnel.com
+  name: demo-wordpress
+  namespace: wordpress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: wordpress.doapps.pro
+    http:
+      paths:
+      - backend:
+          service:
+            name: demo-wordpress
+            port:
+              number: 80
+        path: /
+        pathType: Prefix

@@ -1,0 +1,21 @@
+# https://itnext.io/exposing-kubernetes-apps-to-the-internet-with-cloudflare-tunnel-ingress-controller-and-e30307c0fcb0
+
+cloudflare:
+  tunnelName: "demo-eks"
+  tunnelId: "b014336d-4b15-4bd9-beb1-1998e4c07ac6"
+  secretName: "tunnel-credentials"
+  ingress:
+    - hostname: "*.doapps.pro"
+      service: "https://nginx-ingress-nginx-controller.ingress-nginx.svc.cluster.local:443"
+      originRequest:
+        noTLSVerify: true
+
+resources:
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+
+replicaCount: 1
